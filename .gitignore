@@ -22,7 +22,7 @@ odoo/data_dir
 # maintenance migration scripts
 odoo/addons/base/maintenance
 # window installation config file
-/odoo.conf
+# /odoo.conf
 
 # generated for windows installer?
 install/win32/*.bat
