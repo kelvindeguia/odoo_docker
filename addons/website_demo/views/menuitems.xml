@@ -1,0 +1,12 @@
+<odoo>
+    <menuitem 
+        id="menu_website_demo_root" 
+        name="Website Demo"/>
+
+        <menuitem 
+            id="menu_web_form" 
+            name="Web Forms" 
+            parent="menu_website_demo_root" 
+            action="action_web_form" 
+            sequence="1"/>
+</odoo>

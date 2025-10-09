@@ -1,0 +1,56 @@
+<odoo>
+    <record id="action_web_form" model="ir.actions.act_window">
+        <field name="name">Web Form Action</field>
+        <field name="res_model">web.form</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create your first web form
+            </p>
+        </field>
+    </record>
+
+    <template id="web_form_test_template" name="Web Form Test Template">
+        <t t-call="website.layout">
+            <div class="container">
+                <h1>Web Form Test</h1>
+                <form action="/web-form-test/website_thanks/" method="POST" enctype="multipart/form-data" 
+                    redirect="/website_thanks/">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <div class="form-group">
+                        <label for="name">Name:</label>
+                        <input type="text" class="form-control" id="name" name="name"/>
+                    </div>
+                    <div class="form-group">
+                        <label for="age">Age:</label>
+                        <input type="text" class="form-control" id="age" name="age"/>
+                    </div>
+                    <div class="form-group">
+                        <label for="description">Description:</label>
+                        <input type="text" class="form-control" id="description" name="description"/>
+                    </div>
+                    <button type="submit" class="btn btn-primary mt-3">Submit</button>
+                </form>
+            </div>
+        </t>
+    </template>
+
+    <template id="web_form_website_thanks_test_template" name="Web Form Website Thanks Test Template">
+        <t t-call="website.layout">
+            <div class="container">
+                <h1>Thank You!</h1>
+                <p>Your submission has been received.</p>
+            </div>
+        </t>
+    </template>
+
+    <template id="grace_panget_template" name="Grace Panget Template">
+        <t t-call="website.layout">
+            <div class="container">
+                <h1>Panget si Grace Sobra</h1>
+            </div>
+        </t>
+    </template>
+
+</odoo>
