@@ -1,19 +1,17 @@
 # Start from official Odoo 18 image
 FROM odoo:18.0
 
-# Set working directory inside the container
+# Set working directory inside container
 WORKDIR /mnt/extra-addons
 
-# Copy your custom addons into the container
-# (assumes you have an /addons folder in your GitHub repo)
+# Copy your custom addons (if you have a folder named addons)
 COPY ./addons /mnt/extra-addons
 
-# Copy Odoo configuration file (optional, only if you maintain it in repo)
-# Make sure your repo has odoo.conf at the root
+# Copy config file if available
 COPY ./odoo.conf /etc/odoo/odoo.conf
 
-# Expose the default Odoo port
+# Expose Odoo default port
 EXPOSE 8069
 
-# Run Odoo with config file on startup
+# Run Odoo with config
 CMD ["odoo", "-c", "/etc/odoo/odoo.conf"]
