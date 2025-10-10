@@ -60,7 +60,7 @@ pipeline {
                     --network ${NETWORK_NAME} \
                     -p 8069:8069 \
                     -v $WORKSPACE/addons:/mnt/extra-addons \
-                    -v $WORKSPACE/odoo.conf:/etc/odoo/odoo.conf \
+                    -v $WORKSPACE/odoo.conf:/etc/odoo/odoo.conf:ro \
                     -v odoo-data:/var/lib/odoo \
                     ${IMAGE_NAME}:latest
                 '''
