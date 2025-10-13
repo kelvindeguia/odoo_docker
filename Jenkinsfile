@@ -55,14 +55,20 @@ pipeline {
                 sh '''
                   docker stop ${ODOO_CONTAINER} || true
                   docker rm ${ODOO_CONTAINER} || true
-
+        
+                  # Start Odoo container (without mounting odoo.conf)
                   docker run -d --name ${ODOO_CONTAINER} \
                     --network ${NETWORK_NAME} \
                     -p 8069:8069 \
                     -v $WORKSPACE/addons:/mnt/extra-addons \
-                    -v $WORKSPACE/odoo.conf:/etc/odoo/odoo.conf:ro \
                     -v odoo-data:/var/lib/odoo \
                     ${IMAGE_NAME}:latest
+        
+                  # Copy odoo.conf into the container after it starts
+                  docker cp $WORKSPACE/odoo.conf ${ODOO_CONTAINER}:/etc/odoo/odoo.conf
+        
+                  # Optional: Restart to reload config cleanly
+                  docker restart ${ODOO_CONTAINER}
                 '''
             }
         }
