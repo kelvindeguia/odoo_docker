@@ -12,3 +12,4 @@ class WebForm(models.Model):
     new_field = fields.Char(string="New Field", store=True)
     
     test_new_field = fields.Char(string="Test New Field", store=True)
+    joseph_field = fields.Char(string="Joseph Field", store=True)
