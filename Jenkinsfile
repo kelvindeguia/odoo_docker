@@ -54,33 +54,39 @@ pipeline {
         stage('Blue-Green Deploy') {
             steps {
                 sh '''
-                  # Detect which container is live
-                  if docker ps --format '{{.Names}}' | grep -q "odoo18-blue"; then
+                  # Detect which container is currently live
+                  LIVE=""
+                  if docker ps --format '{{.Names}}' | grep -q "^odoo18-blue$"; then
                       LIVE="odoo18-blue"
+                  elif docker ps --format '{{.Names}}' | grep -q "^odoo18-green$"; then
+                      LIVE="odoo18-green"
+                  fi
+        
+                  # Decide which one to start next and which port to use
+                  if [ "$LIVE" = "odoo18-blue" ]; then
                       NEW="odoo18-green"
                       NEW_PORT=8070
                   else
-                      LIVE="odoo18-green"
                       NEW="odoo18-blue"
                       NEW_PORT=8069
                   fi
         
-                  echo "🔵 Live container: $LIVE"
-                  echo "🟢 Deploying new container: $NEW on port $NEW_PORT"
+                  echo "🔵 Live container: ${LIVE:-none}"
+                  echo "🟢 Deploying new container: $NEW on host port $NEW_PORT"
         
-                  # Check if port is already in use
-                  if ss -tln | grep -q ":$NEW_PORT "; then
-                      echo "⚠️ Port $NEW_PORT already in use. Incrementing to avoid conflict."
+                  # If the port is busy, increment to next free port
+                  while ss -tln | grep -q ":$NEW_PORT "; do
+                      echo "⚠️ Port $NEW_PORT busy, trying next..."
                       NEW_PORT=$((NEW_PORT+1))
-                  fi
+                  done
         
-                  # Remove old $NEW container if exists
+                  # Remove any stopped instance of the NEW container
                   docker rm -f $NEW || true
         
-                  # Start new container on the alternate port
+                  # Start the new container
                   docker run -d --name $NEW \
                     --network ${NETWORK_NAME} \
-                    -p $NEW_PORT:8069 \
+                    -p ${NEW_PORT}:8069 \
                     -v odoo-data:/var/lib/odoo \
                     ${IMAGE_NAME}:latest
         
@@ -94,14 +100,14 @@ pipeline {
         
                   echo "🩺 Checking health..."
                   if docker exec $NEW curl -sSf http://localhost:8069/web/login > /dev/null; then
-                      echo "✅ Odoo $NEW is healthy!"
+                      echo "✅ $NEW is healthy"
                   else
-                      echo "❌ Health check failed. Keeping $LIVE active."
-                      docker logs $NEW | tail -n 30
+                      echo "❌ Health check failed; keeping $LIVE live"
+                      docker logs $NEW | tail -n 20
                       exit 1
                   fi
         
-                  echo "Switching Nginx upstream to $NEW..."
+                  echo "Switching Nginx upstream to $NEW ..."
                   docker exec ${NGINX_CONTAINER} bash -c "cat > ${NGINX_CONF_PATH}" <<EOF
                   upstream odoo_backend {
                       server ${NEW}:8069;
@@ -120,10 +126,13 @@ pipeline {
                   EOF
         
                   docker exec ${NGINX_CONTAINER} nginx -s reload
-                  echo "🔁 Switched Nginx to ${NEW} successfully."
+                  echo "🔁 Switched Nginx to $NEW successfully."
         
-                  echo "🧹 Stopping old container: $LIVE"
-                  docker stop $LIVE || true
+                  # Stop the old container gracefully
+                  if [ -n "$LIVE" ]; then
+                      echo "🧹 Stopping old container: $LIVE"
+                      docker stop $LIVE || true
+                  fi
                 '''
             }
         }
