@@ -68,6 +68,7 @@ pipeline {
         }
     }
 
+    // test
     post {
         success { echo "✅ Odoo deployed successfully!" }
         failure { echo "❌ Build failed." }
