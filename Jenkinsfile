@@ -2,13 +2,14 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "odoo18"
-        ODOO_CONTAINER = "odoo18"
-        DB_CONTAINER = "odoo18-db"
-        NETWORK_NAME = "odoo18-network"
-        DB_USER = "odoo"
-        DB_PASSWORD = "Pr0t3ct10n!"
-        DB_NAME = "postgres"
+        IMAGE_NAME     = "odoo18"
+        DB_CONTAINER   = "odoo18-db"
+        NETWORK_NAME   = "odoo18-network"
+        DB_USER        = "odoo"
+        DB_PASSWORD    = "Pr0t3ct10n!"
+        DB_NAME        = "postgres"
+        NGINX_CONTAINER = "odoo18-nginx"   // container name of your reverse proxy
+        NGINX_CONF_PATH = "/etc/nginx/conf.d/odoo-upstream.conf" // update this if different
     }
 
     stages {
@@ -50,36 +51,82 @@ pipeline {
             }
         }
 
-        stage('Deploy Odoo') {
+        stage('Blue-Green Deploy') {
             steps {
                 sh '''
-                  docker stop ${ODOO_CONTAINER} || true
-                  docker rm ${ODOO_CONTAINER} || true
-        
-                  # Start Odoo container without mounting addons
-                  docker run -d --name ${ODOO_CONTAINER} \
+                  # Determine which Odoo container is live
+                  if docker ps --format '{{.Names}}' | grep -q "odoo18-blue"; then
+                      LIVE="odoo18-blue"
+                      NEW="odoo18-green"
+                      NEW_PORT=8070
+                  else
+                      LIVE="odoo18-green"
+                      NEW="odoo18-blue"
+                      NEW_PORT=8069
+                  fi
+
+                  echo "🔵 Live container: $LIVE"
+                  echo "🟢 Deploying new container: $NEW on port $NEW_PORT"
+
+                  # Remove old $NEW container if exists
+                  docker rm -f $NEW || true
+
+                  # Start new container
+                  docker run -d --name $NEW \
                     --network ${NETWORK_NAME} \
-                    -p 8069:8069 \
+                    -p $NEW_PORT:8069 \
                     -v odoo-data:/var/lib/odoo \
                     ${IMAGE_NAME}:latest
-        
-                  # Copy odoo.conf
-                  docker cp $WORKSPACE/odoo.conf ${ODOO_CONTAINER}:/etc/odoo/odoo.conf
-        
-                  # Copy addons into /mnt/extra-addons
-                  docker exec ${ODOO_CONTAINER} mkdir -p /mnt/extra-addons
-                  docker cp $WORKSPACE/addons/. ${ODOO_CONTAINER}:/mnt/extra-addons/
-        
-                  # Restart container to reload config and addons
-                  docker restart ${ODOO_CONTAINER}
+
+                  # Copy config and addons
+                  docker cp $WORKSPACE/odoo.conf $NEW:/etc/odoo/odoo.conf
+                  docker exec $NEW mkdir -p /mnt/extra-addons
+                  docker cp $WORKSPACE/addons/. $NEW:/mnt/extra-addons/
+
+                  echo "Waiting for Odoo ($NEW) to initialize..."
+                  sleep 20
+
+                  echo "🩺 Checking health..."
+                  if docker exec $NEW curl -sSf http://localhost:8069/web/login > /dev/null; then
+                      echo "✅ Odoo $NEW is healthy!"
+                  else
+                      echo "❌ Health check failed. Keeping $LIVE active."
+                      docker logs $NEW | tail -n 30
+                      exit 1
+                  fi
+
+                  echo "Switching Nginx upstream to $NEW..."
+
+                  # Update the upstream target dynamically inside Nginx
+                  docker exec ${NGINX_CONTAINER} bash -c "cat > ${NGINX_CONF_PATH}" <<EOF
+                  upstream odoo_backend {
+                      server ${NEW}:8069;
+                  }
+                  server {
+                      listen 80;
+                      server_name _;
+                      location / {
+                          proxy_pass http://odoo_backend;
+                          proxy_set_header Host \$host;
+                          proxy_set_header X-Real-IP \$remote_addr;
+                          proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                          proxy_set_header X-Forwarded-Proto \$scheme;
+                      }
+                  }
+                  EOF
+
+                  docker exec ${NGINX_CONTAINER} nginx -s reload
+                  echo "🔁 Switched Nginx to ${NEW} successfully."
+
+                  echo "Stopping old container: $LIVE"
+                  docker stop $LIVE || true
                 '''
             }
         }
     }
 
-    // test
     post {
-        success { echo "✅ Odoo deployed successfully!" }
-        failure { echo "❌ Build failed." }
+        success { echo "✅ Blue-Green Odoo Deployment Successful!" }
+        failure { echo "❌ Blue-Green Deployment Failed. Previous version kept running." }
     }
 }
