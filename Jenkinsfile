@@ -54,7 +54,7 @@ pipeline {
         stage('Blue-Green Deploy') {
             steps {
                 sh '''
-                  # Determine which Odoo container is live
+                  # Detect which container is live
                   if docker ps --format '{{.Names}}' | grep -q "odoo18-blue"; then
                       LIVE="odoo18-blue"
                       NEW="odoo18-green"
@@ -64,28 +64,34 @@ pipeline {
                       NEW="odoo18-blue"
                       NEW_PORT=8069
                   fi
-
+        
                   echo "🔵 Live container: $LIVE"
                   echo "🟢 Deploying new container: $NEW on port $NEW_PORT"
-
+        
+                  # Check if port is already in use
+                  if ss -tln | grep -q ":$NEW_PORT "; then
+                      echo "⚠️ Port $NEW_PORT already in use. Incrementing to avoid conflict."
+                      NEW_PORT=$((NEW_PORT+1))
+                  fi
+        
                   # Remove old $NEW container if exists
                   docker rm -f $NEW || true
-
-                  # Start new container
+        
+                  # Start new container on the alternate port
                   docker run -d --name $NEW \
                     --network ${NETWORK_NAME} \
                     -p $NEW_PORT:8069 \
                     -v odoo-data:/var/lib/odoo \
                     ${IMAGE_NAME}:latest
-
+        
                   # Copy config and addons
                   docker cp $WORKSPACE/odoo.conf $NEW:/etc/odoo/odoo.conf
                   docker exec $NEW mkdir -p /mnt/extra-addons
                   docker cp $WORKSPACE/addons/. $NEW:/mnt/extra-addons/
-
+        
                   echo "Waiting for Odoo ($NEW) to initialize..."
                   sleep 20
-
+        
                   echo "🩺 Checking health..."
                   if docker exec $NEW curl -sSf http://localhost:8069/web/login > /dev/null; then
                       echo "✅ Odoo $NEW is healthy!"
@@ -94,10 +100,8 @@ pipeline {
                       docker logs $NEW | tail -n 30
                       exit 1
                   fi
-
+        
                   echo "Switching Nginx upstream to $NEW..."
-
-                  # Update the upstream target dynamically inside Nginx
                   docker exec ${NGINX_CONTAINER} bash -c "cat > ${NGINX_CONF_PATH}" <<EOF
                   upstream odoo_backend {
                       server ${NEW}:8069;
@@ -114,11 +118,11 @@ pipeline {
                       }
                   }
                   EOF
-
+        
                   docker exec ${NGINX_CONTAINER} nginx -s reload
                   echo "🔁 Switched Nginx to ${NEW} successfully."
-
-                  echo "Stopping old container: $LIVE"
+        
+                  echo "🧹 Stopping old container: $LIVE"
                   docker stop $LIVE || true
                 '''
             }
