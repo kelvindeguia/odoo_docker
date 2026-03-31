@@ -9,6 +9,7 @@
     'description': """
 Module for defining analytic accounting object.
 ===============================================
+# test
 
 In Odoo, analytic accounts are linked to general accounts but are treated
 totally independently. So, you can enter various different analytic operations
