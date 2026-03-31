@@ -47,5 +47,6 @@ odoo.service.server.load_server_wide_modules()
 bind = '127.0.0.1:8069'
 pidfile = '.gunicorn.pid'
 workers = 4
+# test
 timeout = 240
 max_requests = 2000
