@@ -113,6 +113,8 @@ class Applicant(models.Model):
     applicant_properties = fields.Properties('Properties', definition='job_id.applicant_properties_definition', copy=True)
     applicant_notes = fields.Html()
     refuse_date = fields.Datetime('Refuse Date')
+    dispatch_date = fields.Datetime('Dispatch Date', store=True)
+    is_dispatched = fields.Boolean('Is Dispatched', store=True)
 
     def init(self):
         super().init()
